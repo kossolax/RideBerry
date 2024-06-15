@@ -1,0 +1,13 @@
+[Unit]
+Description=Service de gestion de connexion pour wwan
+After=network.target
+
+[Service]
+Restart=always
+Type=forking
+User=root
+ExecStart=/home/kossolax/RideBerry/client/modem.sh internet.bmbpartner.be wwan0
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
