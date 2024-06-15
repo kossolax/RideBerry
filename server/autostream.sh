@@ -13,7 +13,7 @@ fi
 uuid="47ec2a55-b6cc-4ec4-bb42-ff669d146955"
 #server="https://restreamer-raspberry.vps.zaretti.be"
 server="https://restreamer.vps.zaretti.be"
-duration=5
+duration=180
 
 
 current_status="stopped"
@@ -22,13 +22,31 @@ last_alive=$(date +%s)
 
 start() {
         echo "starting..."
-        docker pause obs-gui
-        docker unpause obs-cli
+
+        docker stop obs-gui
+        docker run -d --rm \
+                --name=obs-cli \
+                -v /opt/obs/.config/obs-studio:/root/.config/obs-studio \
+                --shm-size="1gb" \
+                --net=backend \
+                --privileged \
+                --device /dev/dri:/dev/dri \
+                obs-cli
+
 }
 stop() {
         echo "stopping..."
-        docker pause obs-cli
-        docker unpause obs-gui
+
+        docker stop obs-cli
+        docker run -d --rm \
+                --name=obs-gui \
+                -v /opt/obs:/config \
+                --shm-size="1gb" \
+                --net=backend \
+                --privileged \
+                --device /dev/dri:/dev/dri \
+                obs-gui
+
 }
 
 check() {
@@ -39,9 +57,9 @@ check() {
 
         curl -s -X 'GET' $server'/api/v3/rtmp' -H 'accept: application/json' -H 'Authorization: Bearer '$token'' | jq 'map(.name | contains("'$uuid'")) | any'
 }
+docker stop obs-cli obs-gui
+stop
 
-
-echo "auto stream is almost ready"
 while [ true ]; do
         exist=$(check)
 
