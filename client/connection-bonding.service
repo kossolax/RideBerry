@@ -1,10 +1,10 @@
 [Unit]
 Description=Service de bonding
-After=connection-wwan0.service connection-wwan1.service
-Requires=connection-wwan0.service connection-wwan1.service
+After=network.target
+#After=connection-wwan0.service connection-wwan1.service
+#Requires=connection-wwan0.service connection-wwan1.service
 
 [Service]
-Restart=always
 Type=simple
 User=root
 ExecStart=/home/kossolax/RideBerry/client/bonding.sh

@@ -42,12 +42,31 @@ is_screen_valid() {
 start() {
   echo -n "starting..."
 
-  /usr/bin/screen -L -Logfile $pipe -dmS $wwan /usr/sbin/simcom-cm -s $apn -i $wwan
-  while ! is_interface_valid; do
+  while true; do
+    /usr/bin/screen -L -Logfile $pipe -dmS $wwan /usr/sbin/simcom-cm -s $apn -i $wwan
     sleep 1
-  done
-  sleep 1
 
+    for ((i=0; i<60; i++)); do
+
+      if ! is_screen_valid; then
+        echo "Screen session is not valid, retrying..."
+        break 1 # break the inner loop
+      fi
+
+      if is_interface_valid; then
+        echo "Interface is up and running."
+        break 2 # break the outer loop
+      fi
+
+      sleep 1
+    done
+    
+    echo "Connection failed, retrying..."
+    /usr/bin/screen -S $wwan -X quit
+    ifconfig $wwan down
+  done
+
+  sleep 1
   echo "complete"
 }
 stop() {
@@ -62,6 +81,11 @@ stop() {
 restart() {
   stop
   start
+}
+config() {
+  echo "setup DNS"
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 }
 
 

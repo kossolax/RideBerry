@@ -11,34 +11,70 @@ case $1 in
 	[ -n "$broadcast" ] && BROADCAST="broadcast $broadcast"
 	[ -n "$subnet" ] && NETMASK="netmask $subnet"
 
+	last_digit=$(echo "$interface" | sed 's/.*\([0-9]\)$/\1/')
+	server=$(dig +short vps.zaretti.be | tail -n 1)
+	server="54.37.50.166"
+
 	/sbin/ifconfig $interface $ip $BROADCAST $NETMASK
 
 	if [ -n "$router" ]; then
 	    echo "$0: Resetting default routes"
 	    while /sbin/route del default gw 0.0.0.0 dev $interface; do :; done
 
-	    metric=0
+	    
+		metric=$((150 + last_digit * 10))
+		
 	    for i in $router; do
-		/sbin/route add default gw $i dev $interface metric $metric
-		metric=$(($metric + 1))
+	      /sbin/route add default gw $i dev $interface metric $metric
+	      metric=$(($metric + 1))
 	    done
 	fi
+
+	# Advanced routing
+	client=$(ifconfig $interface | awk '/inet / {print $2}')
+	network=$(ip addr show $interface | awk '/inet / {print $2}' | xargs ipcalc -n | awk '/Network:/ {print $2}')
+	gateway=$(ip route show dev $interface | awk '/default via/ {print $3}')
+	wlan=$(ip addr show wlan0 | awk '/inet / {print $2}' | xargs ipcalc -n | awk '/Network:/ {print $2}')
+
+	table=$((100 + last_digit * 100))
+	if ! grep -q $interface /etc/iproute2/rt_tables; then
+		echo "$table	$interface" >> /etc/iproute2/rt_tables
+	fi
+
+	# advanced routing table
+	ip route add $network dev $interface src $client table $table
+	ip route add default via $gateway table $table
+	ip rule add from $client table $table
+
+	# route wlan & localhost throught vpn
+	ip route add $wlan dev wlan0 table $table
+	#ip route add $network1 dev wwan1 table 100
+	ip route add 127.0.0.0/8 dev lo table $table
+
+	# add to path
+	previous=$(cat /tmp/route.bonding.$interface)
+	if ! [ -z "$previous" ] && [ "$previous" != "$client" ]; then
+		glorytun path down $previous
+	fi
+	glorytun path up $client rate tx 10mbit rx 10mbit
+	echo $client > /tmp/route.bonding.$interface
 
 	# Update resolver configuration file
 	R=""
 	[ -n "$domain" ] && R="domain $domain
 "
+
 	for i in $dns; do
 	    echo "$0: Adding DNS $i"
 	    R="${R}nameserver $i
 "
 	done
 
-	if [ -x /sbin/resolvconf ]; then
-	    echo -n "$R" | resolvconf -a "${interface}.udhcpc"
-	else
-	    echo -n "$R" > "$RESOLV_CONF"
-	fi
+	# if [ -x /sbin/resolvconf ]; then
+	#     echo -n "$R" | resolvconf -a "${interface}.udhcpc"
+	# else
+	#     echo -n "$R" > "$RESOLV_CONF"
+	# fi
 	;;
 
     deconfig)
